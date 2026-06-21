@@ -21,7 +21,7 @@ export function bookFlightPTB(
     ],
   });
 
-  const [coin, receipt] = tx.moveCall({
+  const receipt = tx.moveCall({
     target: `${paymentModule(packageId)}::execute_payment`,
     arguments: [intent, vaultArg],
   });
@@ -36,6 +36,4 @@ export function bookFlightPTB(
       receipt,
     ],
   });
-
-  tx.transferObjects([coin], sender);
 }

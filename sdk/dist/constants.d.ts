@@ -1,4 +1,4 @@
-export declare const PACKAGE_ID = "0x5644eb839fa9311dd1967e396cd8e8906cfa052575d28ff2b3bab98631d737db";
+export declare const PACKAGE_ID = "0x602448e9585149916ac0f6d716ad4875db80c2e45ff0afe9093edbc8a39dd9f1";
 export declare const MODULES: {
     readonly PLAN: "plan";
     readonly VAULT: "vault";

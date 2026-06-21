@@ -12,7 +12,7 @@ export function bookHotelPTB(tx, packageId, sender, input) {
             tx.pure.u64(Math.floor(Date.now() / 1000) + 86400 * 30),
         ],
     });
-    const [coin, receipt] = tx.moveCall({
+    const receipt = tx.moveCall({
         target: `${paymentModule(packageId)}::execute_payment`,
         arguments: [intent, vaultArg],
     });
@@ -26,6 +26,5 @@ export function bookHotelPTB(tx, packageId, sender, input) {
             receipt,
         ],
     });
-    tx.transferObjects([coin], sender);
 }
 //# sourceMappingURL=bookHotel.js.map
