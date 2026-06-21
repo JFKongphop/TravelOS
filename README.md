@@ -492,31 +492,6 @@ Tests:      28/28 passing
 
 ---
 
-## Architecture
-
-```
-┌────────────────────────────────────────────────────────┐
-│                    USER INTERFACE                      │
-│         Next.js · @mysten/dapp-kit · Sui Wallet        │
-└───────────────────────┬────────────────────────────────┘
-                        │ REST
-┌───────────────────────▼────────────────────────────────┐
-│                  AI AGENT LAYER                        │
-│     Supervisor → Planner · Treasury · Booking · Risk   │
-│        OpenAI GPT-4o-mini · Walrus blob storage        │
-└───────────────────────┬────────────────────────────────┘
-                        │ PTB (Programmable Transaction Block)
-┌───────────────────────▼───────────────────────────────┐
-│               MOVE SMART CONTRACTS                    │
-│ plan · vault · payment · reservation · yield · rules  │
-│            Sui Testnet · travel_os package            │
-└───────────────────────────────────────────────────────┘
-```
-
-**Key insight:** The AI agent builds the PTB. The user wallet signs it. The agent never holds keys.
-
----
-
 ## DeFi Track — How It Works
 
 ### 1. Goal-Based Treasury (`travel::vault`)

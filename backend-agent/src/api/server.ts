@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { SupervisorAgent } from "../agents/supervisor.js";
@@ -68,7 +69,6 @@ app.post("/api/execute", async (req, res) => {
       vaultId:     DUMMY_ID,
       planId:      DUMMY_ID,
       positionId:  DUMMY_ID,
-      amount:      100,
       protocol:    "Scallop",
       provider:    "Test Provider",
       destination: "Tokyo",
