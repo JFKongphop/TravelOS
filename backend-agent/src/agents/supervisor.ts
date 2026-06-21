@@ -1,0 +1,188 @@
+import { askJSON } from "../ai.js";
+import { PlannerAgent } from "./planner.js";
+import { TreasuryAgent } from "./treasury.js";
+import { BookingAgent } from "./booking.js";
+import { RiskAgent } from "./risk.js";
+import { getSDK } from "../sdk.js";
+import { uploadToWalrus, walrusUrl } from "../walrus.js";
+import type { ExecutionPlan, TravelContext, AgentResponse, ActionStep, FullTripPlan } from "../types.js";
+
+export class SupervisorAgent {
+  private planner = new PlannerAgent();
+  private treasury = new TreasuryAgent();
+  private booking = new BookingAgent();
+  private risk = new RiskAgent();
+
+  getPlanner() { return this.planner; }
+
+  async handle(input: { message: string }): Promise<{
+    context: TravelContext; plan: ExecutionPlan; logs: AgentResponse[];
+    walrus: { blobId: string | null; url: string }; markdown: string;
+  }> {
+    const logs: AgentResponse[] = [];
+
+    const parsed = await this.parseMessage(input.message);
+    const ctx: TravelContext = {
+      userId: "user-1",
+      destination: parsed.destination,
+      budget: parsed.budget,
+      duration: parsed.duration,
+    };
+
+    const blueprint = await this.planner.generateBlueprint({
+      destination: ctx.destination, budget: ctx.budget, duration: ctx.duration,
+    });
+    ctx.blueprint = blueprint;
+    logs.push({ agent: "planner", data: blueprint });
+
+    const md = this.planner.toMarkdown(blueprint);
+    const blobId = await uploadToWalrus(new TextEncoder().encode(md));
+    const url = blobId ? walrusUrl(blobId) : "";
+    logs.push({ agent: "walrus", data: { blobId, url, stored: !!blobId } });
+
+    const treasuryPlan = this.treasury.decide(blueprint, {
+      vaultBalance: ctx.budget, departureDate: "2026-07-01", budget: ctx.budget,
+    });
+    ctx.treasuryPlan = treasuryPlan;
+    logs.push({ agent: "treasury", data: treasuryPlan });
+
+    const bookingPlan = this.booking.plan(blueprint);
+    ctx.bookingPlan = bookingPlan;
+    logs.push({ agent: "booking", data: bookingPlan });
+
+    const riskAssessment = this.risk.assess({ blueprint, treasuryPlan, bookingPlan });
+    ctx.riskResult = riskAssessment;
+    logs.push({ agent: "risk", data: riskAssessment });
+
+    return {
+      context: ctx,
+      plan: { blueprint, treasuryStrategy: treasuryPlan, bookings: bookingPlan, riskAssessment },
+      logs,
+      walrus: { blobId, url },
+      markdown: md,
+    };
+  }
+
+  /** Full trip plan — blueprint + executable action steps */
+  async fullPlan(sender: string, input: { message: string }): Promise<FullTripPlan> {
+    const base = await this.handle(input);
+    const bp = base.plan.blueprint;
+    const ts = base.plan.treasuryStrategy;
+    const bk = base.plan.bookings;
+
+    const actions: ActionStep[] = [];
+
+    // Step 1: Create trip on-chain
+    actions.push({
+      step: 1,
+      name: "Create Travel Treasury",
+      description: `Create ${bp.destination} trip plan + vault with $${bp.budget} budget`,
+      action: "createTrip",
+      params: {
+        destination: bp.destination,
+        startDate: Math.floor(Date.now() / 1000) + 86400,
+        endDate: Math.floor(Date.now() / 1000) + 86400 * (bp.duration + 1),
+        totalBudget: bp.budget,
+      },
+    });
+
+    // Step 2: Deposit funds
+    actions.push({
+      step: 2,
+      name: "Deposit Travel Funds",
+      description: `Deposit $${bp.budget} into travel vault`,
+      action: "depositFunds",
+      params: {
+        vaultId: "{{vaultId}}",  // resolved after step 1
+        amount: bp.budget * 1_000_000_000, // USD → MIST (mock)
+      },
+    });
+
+    // Step 3: Invest idle capital (if recommended)
+    if (ts.investAmount > 0) {
+      actions.push({
+        step: 3,
+        name: "Invest Idle Capital",
+        description: `Invest $${ts.investAmount} in ${ts.protocol} (${ts.prepareLiquidityDays} days before departure)`,
+        action: "investIdleCapital",
+        params: {
+          vaultId: "{{vaultId}}",
+          amount: ts.investAmount * 1_000_000_000,
+          protocol: ts.protocol,
+        },
+      });
+    }
+
+    // Step 4: Book hotel
+    if (bk.hotel) {
+      actions.push({
+        step: actions.length + 1,
+        name: `Book Hotel: ${bk.hotel.name}`,
+        description: `Reserve ${bk.hotel.name} at $${bk.hotel.pricePerNight}/night × ${bp.duration} nights = $${bk.hotel.pricePerNight * bp.duration}`,
+        action: "bookHotel",
+        params: {
+          vaultId: "{{vaultId}}",
+          planId: "{{planId}}",
+          provider: bk.hotel.name,
+          amount: bk.hotel.pricePerNight * bp.duration * 1_000_000_000,
+        },
+      });
+    }
+
+    // Step 5: Book flight
+    if (bk.flight) {
+      actions.push({
+        step: actions.length + 1,
+        name: `Book Flight: ${bk.flight.airline}`,
+        description: `${bk.flight.airline} — $${bk.flight.price}`,
+        action: "bookFlight",
+        params: {
+          vaultId: "{{vaultId}}",
+          planId: "{{planId}}",
+          provider: bk.flight.airline,
+          amount: bk.flight.price * 1_000_000_000,
+        },
+      });
+    }
+
+    // Step N: Complete trip
+    actions.push({
+      step: actions.length + 1,
+      name: "Complete Trip",
+      description: "Finalize trip — mark vault as completed",
+      action: "completeTrip",
+      params: { vaultId: "{{vaultId}}" },
+    });
+
+    const summary = `## ${bp.destination} — ${bp.duration} Days, $${bp.budget}\n\n` +
+      `🏨 ${bk.hotel?.name || "TBD"} | ✈️ ${bk.flight?.airline || "TBD"}\n` +
+      `💰 Invest: $${ts.investAmount} in ${ts.protocol} | Liquid: $${ts.liquidAmount}\n` +
+      `📋 ${actions.length} on-chain steps | ${base.plan.riskAssessment.approved ? "✅ Approved" : "⚠️ " + base.plan.riskAssessment.reasons.join(", ")}`;
+
+    return { ...base, actions, summary };
+  }
+
+  async execute(action: string, sender: string, params: any): Promise<any> {
+    const sdk = getSDK();
+    switch (action) {
+      case "createTrip": return sdk.createTrip(sender, params);
+      case "depositFunds": return sdk.depositFunds(params);
+      case "investIdleCapital": return sdk.investIdleCapital(params);
+      case "prepareForDeparture": return sdk.prepareForDeparture(params);
+      case "bookHotel": return sdk.bookHotel(sender, params);
+      case "bookFlight": return sdk.bookFlight(sender, params);
+      case "cancelBooking": return sdk.cancelBooking(params);
+      case "completeTrip": return sdk.completeTrip(params);
+      default: throw new Error(`Unknown action: ${action}`);
+    }
+  }
+
+  private async parseMessage(msg: string): Promise<{
+    destination: string; budget: number; duration: number;
+  }> {
+    return askJSON(
+      `Extract travel parameters from user messages. Output ONLY valid JSON: { "destination": string, "budget": number, "duration": number }. If unclear, use defaults: Tokyo, 2000, 7.`,
+      msg,
+    );
+  }
+}
