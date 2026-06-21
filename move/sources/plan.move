@@ -139,6 +139,30 @@ module travel_os::plan {
   }
 
   // ============================================================
+  // Entry Functions — direct wallet/CLI access
+  // ============================================================
+
+  entry fun create_plan_entry(
+    destination: String,
+    start_date: u64,
+    end_date: u64,
+    total_budget: u64,
+    ctx: &mut TxContext,
+  ) {
+    let plan = create_plan(destination, start_date, end_date, total_budget, ctx);
+    transfer::public_transfer(plan, ctx.sender());
+  }
+
+  entry fun add_budget_item_entry(
+    plan: &mut TravelPlan,
+    category: u8,
+    amount: u64,
+    label: String,
+  ) {
+    add_budget_item(plan, category, amount, label);
+  }
+
+  // ============================================================
   // Tests
   // ============================================================
 

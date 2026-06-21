@@ -174,6 +174,35 @@ module travel_os::vault {
   }
 
   // ============================================================
+  // Entry Functions — direct wallet/CLI access
+  // ============================================================
+
+  entry fun create_vault_entry(
+    plan: &mut TravelPlan,
+    departure_time: u64,
+    ctx: &mut TxContext,
+  ) {
+    let vault = create_vault(plan, departure_time, ctx);
+    transfer::public_transfer(vault, ctx.sender());
+  }
+
+  entry fun deposit_entry(vault: &mut TravelVault, coin: Coin<SUI>) {
+    deposit(vault, coin);
+  }
+
+  entry fun mark_ready_entry(vault: &mut TravelVault) {
+    mark_ready(vault);
+  }
+
+  entry fun mark_traveling_entry(vault: &mut TravelVault) {
+    mark_traveling(vault);
+  }
+
+  entry fun mark_completed_entry(vault: &mut TravelVault) {
+    mark_completed(vault);
+  }
+
+  // ============================================================
   // Tests
   // ============================================================
 

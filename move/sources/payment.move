@@ -86,7 +86,7 @@ module travel_os::payment {
     intent: &mut PaymentIntent,
     vault: &mut TravelVault,
     ctx: &mut TxContext,
-  ): (Coin<SUI>, PaymentReceipt) {
+  ): PaymentReceipt {
     assert!(!intent.executed, EAlreadyExecuted);
     assert!(vault::is_owner(vault, ctx.sender()), ENotVaultOwner);
     assert!(vault::balance_amount(vault) >= intent.amount, EInsufficientVaultBalance);
@@ -94,6 +94,9 @@ module travel_os::payment {
     intent.executed = true;
 
     let coin = vault::withdraw_coin(vault, intent.amount, ctx);
+
+    // Transfer payment to merchant — real settlement
+    transfer::public_transfer(coin, intent.merchant);
 
     let receipt = PaymentReceipt {
       id: object::new(ctx),
@@ -109,7 +112,32 @@ module travel_os::payment {
       receipt_id: object::uid_to_inner(&receipt.id),
       amount: intent.amount,
     });
-    (coin, receipt)
+    receipt
+  }
+
+  // ============================================================
+  // Entry Functions — direct wallet/CLI access
+  // ============================================================
+
+  entry fun create_intent_entry(
+    vault: &TravelVault,
+    vault_id: ID,
+    merchant: address,
+    amount: u64,
+    deadline_epoch: u64,
+    ctx: &mut TxContext,
+  ) {
+    let intent = create_intent(vault, vault_id, merchant, amount, deadline_epoch, ctx);
+    transfer::public_transfer(intent, ctx.sender());
+  }
+
+  entry fun execute_payment_entry(
+    intent: &mut PaymentIntent,
+    vault: &mut TravelVault,
+    ctx: &mut TxContext,
+  ) {
+    let receipt = execute_payment(intent, vault, ctx);
+    transfer::public_transfer(receipt, ctx.sender());
   }
 
   // ============================================================
@@ -155,13 +183,11 @@ module travel_os::payment {
     let mut intent = create_intent(&vault, object::id_from_address(@0x1), merchant, 500, 9999, ctx);
     assert!(!is_executed(&intent));
 
-    let (payment_coin, receipt) = execute_payment(&mut intent, &mut vault, ctx);
+    let receipt = execute_payment(&mut intent, &mut vault, ctx);
     assert!(is_executed(&intent));
-    assert!(coin::value(&payment_coin) == 500);
     assert!(receipt.merchant == merchant);
     assert!(vault::balance_amount(&vault) == 500);
 
-    coin::burn_for_testing(payment_coin);
     transfer::public_transfer(intent, user);
     transfer::public_transfer(receipt, user);
     transfer::public_transfer(vault, user);
@@ -182,12 +208,10 @@ module travel_os::payment {
     vault::deposit(&mut vault, coin);
 
     let mut intent = create_intent(&vault, object::id_from_address(@0x1), merchant, 500, 9999, ctx);
-    let (c1, r1) = execute_payment(&mut intent, &mut vault, ctx);
-    coin::burn_for_testing(c1);
+    let r1 = execute_payment(&mut intent, &mut vault, ctx);
     transfer::public_transfer(r1, user);
 
-    let (c2, r2) = execute_payment(&mut intent, &mut vault, ctx);
-    coin::burn_for_testing(c2);
+    let r2 = execute_payment(&mut intent, &mut vault, ctx);
     transfer::public_transfer(r2, user);
     transfer::public_transfer(intent, user);
     transfer::public_transfer(vault, user);

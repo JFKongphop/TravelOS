@@ -3,7 +3,7 @@
 
 module travel_os::reservation {
   use std::string::{Self, String};
-  use sui::{display, event, object::{Self, ID, UID}, transfer, tx_context::TxContext};
+  use sui::{coin::Coin, display, event, object::{Self, ID, UID}, sui::SUI, transfer, tx_context::TxContext};
   use travel_os::{payment::{Self, PaymentReceipt}, vault::{Self, TravelVault}};
 
   // ============================================================
@@ -122,19 +122,48 @@ module travel_os::reservation {
     event::emit(ReservationCancelled { reservation_id: object::uid_to_inner(&nft.id) });
   }
 
-  // Placeholder for future payment-provider integration.
-  // Currently updates status only. Full flow:
-  // Provider Returns Funds → Funds Sent To Vault → Vault Balance Updated
+  // Provider returns funds → deposited into vault → NFT marked refunded
   public fun refund_to_vault(
     nft: &mut ReservationNFT,
-    _vault: &mut TravelVault,
-    _refund_amount: u64,
+    vault: &mut TravelVault,
+    refund_coin: Coin<SUI>,
     _ctx: &TxContext,
   ) {
     assert!(nft.status == STATUS_CANCELLED, ENotCancellable);
     assert!(nft.status != STATUS_REFUNDED, EAlreadyRefunded);
     nft.status = STATUS_REFUNDED;
+    // Deposit the refund back into the travel vault
+    vault::deposit(vault, refund_coin);
     event::emit(ReservationRefunded { reservation_id: object::uid_to_inner(&nft.id) });
+  }
+
+  // ============================================================
+  // Entry Functions — direct wallet/CLI access
+  // ============================================================
+
+  entry fun mint_entry(
+    plan_id: ID,
+    provider: String,
+    reservation_type: u8,
+    amount: u64,
+    receipt: &PaymentReceipt,
+    ctx: &mut TxContext,
+  ) {
+    let nft = mint(plan_id, provider, reservation_type, amount, receipt, ctx);
+    transfer::public_transfer(nft, ctx.sender());
+  }
+
+  entry fun cancel_entry(nft: &mut ReservationNFT) {
+    cancel(nft);
+  }
+
+  entry fun refund_entry(
+    nft: &mut ReservationNFT,
+    vault: &mut TravelVault,
+    refund_coin: Coin<SUI>,
+    ctx: &mut TxContext,
+  ) {
+    refund_to_vault(nft, vault, refund_coin, ctx);
   }
 
   // ============================================================

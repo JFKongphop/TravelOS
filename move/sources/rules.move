@@ -110,6 +110,29 @@ module travel_os::rules {
   }
 
   // ============================================================
+  // Entry Functions — direct wallet/CLI access
+  // ============================================================
+
+  entry fun create_rule_entry(
+    vault: &TravelVault,
+    vault_id: ID,
+    rule_type: u8,
+    trigger_time: u64,
+    ctx: &mut TxContext,
+  ) {
+    let rule = create_rule(vault, vault_id, rule_type, trigger_time, ctx);
+    transfer::public_transfer(rule, ctx.sender());
+  }
+
+  entry fun disable_rule_entry(rule: &mut AutomationRule, vault: &TravelVault, ctx: &TxContext) {
+    disable_rule(rule, vault, ctx);
+  }
+
+  entry fun enable_rule_entry(rule: &mut AutomationRule, vault: &TravelVault, ctx: &TxContext) {
+    enable_rule(rule, vault, ctx);
+  }
+
+  // ============================================================
   // Tests
   // ============================================================
 

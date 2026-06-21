@@ -111,6 +111,30 @@ module travel_os::yield {
   }
 
   // ============================================================
+  // Entry Functions — direct wallet/CLI access
+  // ============================================================
+
+  entry fun create_position_entry(
+    vault: &TravelVault,
+    vault_id: ID,
+    protocol_name: String,
+    deposited_amount: u64,
+    receipt_token_type: String,
+    ctx: &mut TxContext,
+  ) {
+    let position = create_position(vault, vault_id, protocol_name, deposited_amount, receipt_token_type, ctx);
+    transfer::public_transfer(position, ctx.sender());
+  }
+
+  entry fun close_position_entry(
+    position: &mut YieldPosition,
+    vault: &TravelVault,
+    ctx: &TxContext,
+  ) {
+    close_position(position, vault, ctx);
+  }
+
+  // ============================================================
   // Tests
   // ============================================================
 
