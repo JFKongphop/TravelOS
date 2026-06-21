@@ -13,6 +13,9 @@ export class SupervisorAgent {
   private booking = new BookingAgent();
   private risk = new RiskAgent();
 
+  // Store last assessment for risk-gating execution
+  private lastRiskResult: { approved: boolean; reasons: string[] } | null = null;
+
   getPlanner() { return this.planner; }
 
   async handle(input: { message: string }): Promise<{
@@ -52,6 +55,7 @@ export class SupervisorAgent {
 
     const riskAssessment = this.risk.assess({ blueprint, treasuryPlan, bookingPlan });
     ctx.riskResult = riskAssessment;
+    this.lastRiskResult = riskAssessment;
     logs.push({ agent: "risk", data: riskAssessment });
 
     return {
@@ -93,8 +97,8 @@ export class SupervisorAgent {
       description: `Deposit $${bp.budget} into travel vault`,
       action: "depositFunds",
       params: {
-        vaultId: "{{vaultId}}",  // resolved after step 1
-        amount: bp.budget * 1_000_000_000, // USD → MIST (mock)
+        vaultId: "<resolved-after-step-1>",
+        amount: bp.budget * 1_000_000_000,
       },
     });
 
@@ -106,7 +110,7 @@ export class SupervisorAgent {
         description: `Invest $${ts.investAmount} in ${ts.protocol} (${ts.prepareLiquidityDays} days before departure)`,
         action: "investIdleCapital",
         params: {
-          vaultId: "{{vaultId}}",
+          vaultId: "<resolved-after-step-2>",
           amount: ts.investAmount * 1_000_000_000,
           protocol: ts.protocol,
         },
@@ -121,8 +125,8 @@ export class SupervisorAgent {
         description: `Reserve ${bk.hotel.name} at $${bk.hotel.pricePerNight}/night × ${bp.duration} nights = $${bk.hotel.pricePerNight * bp.duration}`,
         action: "bookHotel",
         params: {
-          vaultId: "{{vaultId}}",
-          planId: "{{planId}}",
+          vaultId: "<resolved-after-step-2>",
+          planId: "<resolved-after-step-1>",
           provider: bk.hotel.name,
           amount: bk.hotel.pricePerNight * bp.duration * 1_000_000_000,
         },
@@ -137,8 +141,8 @@ export class SupervisorAgent {
         description: `${bk.flight.airline} — $${bk.flight.price}`,
         action: "bookFlight",
         params: {
-          vaultId: "{{vaultId}}",
-          planId: "{{planId}}",
+          vaultId: "<resolved-after-step-2>",
+          planId: "<resolved-after-step-1>",
           provider: bk.flight.airline,
           amount: bk.flight.price * 1_000_000_000,
         },
@@ -151,7 +155,7 @@ export class SupervisorAgent {
       name: "Complete Trip",
       description: "Finalize trip — mark vault as completed",
       action: "completeTrip",
-      params: { vaultId: "{{vaultId}}" },
+      params: { vaultId: "<resolved-after-prior-step>" },
     });
 
     const summary = `## ${bp.destination} — ${bp.duration} Days, $${bp.budget}\n\n` +
@@ -163,6 +167,14 @@ export class SupervisorAgent {
   }
 
   async execute(action: string, sender: string, params: any): Promise<any> {
+    // Risk gate: block dangerous actions if risk assessment failed
+    const gatedActions = ["depositFunds", "investIdleCapital", "bookHotel", "bookFlight"];
+    if (gatedActions.includes(action) && this.lastRiskResult && !this.lastRiskResult.approved) {
+      throw new Error(
+        `Action "${action}" blocked by Risk Agent: ${this.lastRiskResult.reasons.join("; ")}`
+      );
+    }
+
     const sdk = getSDK();
     switch (action) {
       case "createTrip": return sdk.createTrip(sender, params);
