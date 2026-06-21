@@ -256,7 +256,7 @@ module travel_os::flow_tests {
     // Create stake-idle-funds rule
     let mut rule_stake = rules::create_rule(&v, vid, 0, 9999, ctx);
     // Create withdraw-before-trip rule
-    let mut rule_withdraw = rules::create_rule(&v, vid, 1, 9998, ctx);
+    let rule_withdraw = rules::create_rule(&v, vid, 1, 9998, ctx);
 
     assert!(rules::is_enabled(&rule_stake));
     assert!(rules::is_enabled(&rule_withdraw));
