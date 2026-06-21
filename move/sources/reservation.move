@@ -3,7 +3,7 @@
 
 module travel_os::reservation {
   use std::string::{Self, String};
-  use sui::{display, object::{Self, UID}, transfer, tx_context::TxContext};
+  use sui::{display, event, object::{Self, ID, UID}, transfer, tx_context::TxContext};
   use travel_os::{payment::{Self, PaymentReceipt}, vault::{Self, TravelVault}};
 
   // ============================================================
@@ -14,6 +14,18 @@ module travel_os::reservation {
   const EAlreadyCancelled: u64 = 1;
   const ENotCancellable: u64 = 2;
   const EAlreadyRefunded: u64 = 4;
+
+  // ============================================================
+  // Events
+  // ============================================================
+
+  public struct ReservationMinted has copy, drop {
+    reservation_id: ID,
+    plan_id: ID,
+    reservation_type: u8,
+  }
+  public struct ReservationCancelled has copy, drop { reservation_id: ID }
+  public struct ReservationRefunded has copy, drop { reservation_id: ID }
 
   // ============================================================
   // Reservation Types
@@ -39,11 +51,11 @@ module travel_os::reservation {
 
   public struct ReservationNFT has key, store {
     id: UID,
-    trip_id: u64,
+    plan_id: ID,
     provider: String,
     reservation_type: u8,
     amount: u64,
-    reservation_date: u64,
+    reservation_epoch: u64,
     status: u8,
   }
 
@@ -78,7 +90,7 @@ module travel_os::reservation {
   // ============================================================
 
   public fun mint(
-    trip_id: u64,
+    plan_id: ID,
     provider: String,
     reservation_type: u8,
     amount: u64,
@@ -87,22 +99,32 @@ module travel_os::reservation {
   ): ReservationNFT {
     assert!(reservation_type <= TYPE_TRANSPORT, EInvalidReservationType);
 
-    ReservationNFT {
+    let nft = ReservationNFT {
       id: object::new(ctx),
-      trip_id,
+      plan_id,
       provider,
       reservation_type,
       amount,
-      reservation_date: ctx.epoch(),
+      reservation_epoch: ctx.epoch(),
       status: STATUS_CONFIRMED,
-    }
+    };
+    event::emit(ReservationMinted {
+      reservation_id: object::uid_to_inner(&nft.id),
+      plan_id,
+      reservation_type,
+    });
+    nft
   }
 
   public fun cancel(nft: &mut ReservationNFT) {
     assert!(nft.status == STATUS_CONFIRMED, EAlreadyCancelled);
     nft.status = STATUS_CANCELLED;
+    event::emit(ReservationCancelled { reservation_id: object::uid_to_inner(&nft.id) });
   }
 
+  // Placeholder for future payment-provider integration.
+  // Currently updates status only. Full flow:
+  // Provider Returns Funds → Funds Sent To Vault → Vault Balance Updated
   public fun refund_to_vault(
     nft: &mut ReservationNFT,
     _vault: &mut TravelVault,
@@ -112,6 +134,7 @@ module travel_os::reservation {
     assert!(nft.status == STATUS_CANCELLED, ENotCancellable);
     assert!(nft.status != STATUS_REFUNDED, EAlreadyRefunded);
     nft.status = STATUS_REFUNDED;
+    event::emit(ReservationRefunded { reservation_id: object::uid_to_inner(&nft.id) });
   }
 
   // ============================================================
@@ -136,6 +159,10 @@ module travel_os::reservation {
     nft.status == STATUS_CONFIRMED
   }
 
+  public fun reservation_type(nft: &ReservationNFT): u8 {
+    nft.reservation_type
+  }
+
   public fun is_cancelled(nft: &ReservationNFT): bool {
     nft.status == STATUS_CANCELLED
   }
@@ -153,7 +180,8 @@ module travel_os::reservation {
 
     let receipt = payment::new_test_receipt(ctx);
 
-    let mut nft = mint(1, string::utf8(b"Hilton Tokyo"), TYPE_HOTEL, 500, &receipt, ctx);
+    let plan_id = object::id_from_address(@0x1);
+    let mut nft = mint(plan_id, string::utf8(b"Hilton Tokyo"), TYPE_HOTEL, 500, &receipt, ctx);
     assert!(is_confirmed(&nft));
     assert!(nft.reservation_type == TYPE_HOTEL);
 
@@ -176,7 +204,8 @@ module travel_os::reservation {
 
     let receipt = payment::new_test_receipt(ctx);
 
-    let mut nft = mint(1, string::utf8(b"Hilton Tokyo"), TYPE_HOTEL, 500, &receipt, ctx);
+    let plan_id = object::id_from_address(@0x1);
+    let mut nft = mint(plan_id, string::utf8(b"Hilton Tokyo"), TYPE_HOTEL, 500, &receipt, ctx);
     cancel(&mut nft);
     cancel(&mut nft); // should fail
 

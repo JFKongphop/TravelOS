@@ -2,7 +2,14 @@
 // Purpose: Handles travel payment execution — intent + receipt pattern
 
 module travel_os::payment {
-  use sui::{coin::{Self, Coin}, sui::SUI};
+  use sui::{
+    coin::{Self, Coin},
+    event,
+    object::{Self, ID, UID},
+    sui::SUI,
+    transfer,
+    tx_context::TxContext
+  };
   use travel_os::vault::{Self, TravelVault};
 
   // ============================================================
@@ -15,25 +22,32 @@ module travel_os::payment {
   const EInsufficientVaultBalance: u64 = 3;
 
   // ============================================================
+  // Events
+  // ============================================================
+
+  public struct PaymentIntentCreated has copy, drop { intent_id: ID, vault_id: ID, amount: u64 }
+  public struct PaymentExecuted has copy, drop { intent_id: ID, receipt_id: ID, amount: u64 }
+
+  // ============================================================
   // Structs
   // ============================================================
 
   public struct PaymentIntent has key, store {
     id: UID,
-    vault_id: u64,
+    vault_id: ID,
     merchant: address,
     amount: u64,
-    deadline: u64,
+    deadline_epoch: u64,
     executed: bool,
   }
 
   public struct PaymentReceipt has key, store {
     id: UID,
     intent_id: ID,
-    vault_id: u64,
+    vault_id: ID,
     merchant: address,
     amount: u64,
-    timestamp: u64,
+    epoch: u64,
   }
 
   // ============================================================
@@ -42,24 +56,30 @@ module travel_os::payment {
 
   public fun create_intent(
     vault: &TravelVault,
-    vault_id: u64,
+    vault_id: ID,
     merchant: address,
     amount: u64,
-    deadline: u64,
+    deadline_epoch: u64,
     ctx: &mut TxContext,
   ): PaymentIntent {
     assert!(vault::is_owner(vault, ctx.sender()), ENotVaultOwner);
     assert!(amount > 0, 0);
-    assert!(deadline > ctx.epoch(), EDeadlinePassed);
+    assert!(deadline_epoch > ctx.epoch(), EDeadlinePassed);
 
-    PaymentIntent {
+    let intent = PaymentIntent {
       id: object::new(ctx),
       vault_id,
       merchant,
       amount,
-      deadline,
+      deadline_epoch,
       executed: false,
-    }
+    };
+    event::emit(PaymentIntentCreated {
+      intent_id: object::uid_to_inner(&intent.id),
+      vault_id,
+      amount,
+    });
+    intent
   }
 
   public fun execute_payment(
@@ -81,9 +101,14 @@ module travel_os::payment {
       vault_id: intent.vault_id,
       merchant: intent.merchant,
       amount: intent.amount,
-      timestamp: ctx.epoch(),
+      epoch: ctx.epoch(),
     };
 
+    event::emit(PaymentExecuted {
+      intent_id: object::uid_to_inner(&intent.id),
+      receipt_id: object::uid_to_inner(&receipt.id),
+      amount: intent.amount,
+    });
     (coin, receipt)
   }
 
@@ -96,10 +121,10 @@ module travel_os::payment {
     PaymentReceipt {
       id: object::new(ctx),
       intent_id: object::id_from_address(@0x1),
-      vault_id: 1,
+      vault_id: object::id_from_address(@0x1),
       merchant: @0xB,
       amount: 500,
-      timestamp: 100,
+      epoch: 100,
     }
   }
 
@@ -127,7 +152,7 @@ module travel_os::payment {
     let coin = coin::mint_for_testing(1000, ctx);
     vault::deposit(&mut vault, coin);
 
-    let mut intent = create_intent(&vault, 1, merchant, 500, 9999, ctx);
+    let mut intent = create_intent(&vault, object::id_from_address(@0x1), merchant, 500, 9999, ctx);
     assert!(!is_executed(&intent));
 
     let (payment_coin, receipt) = execute_payment(&mut intent, &mut vault, ctx);
@@ -156,7 +181,7 @@ module travel_os::payment {
     let coin = coin::mint_for_testing(1000, ctx);
     vault::deposit(&mut vault, coin);
 
-    let mut intent = create_intent(&vault, 1, merchant, 500, 9999, ctx);
+    let mut intent = create_intent(&vault, object::id_from_address(@0x1), merchant, 500, 9999, ctx);
     let (c1, r1) = execute_payment(&mut intent, &mut vault, ctx);
     coin::burn_for_testing(c1);
     transfer::public_transfer(r1, user);

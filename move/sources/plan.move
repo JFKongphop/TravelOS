@@ -3,7 +3,7 @@
 
 module travel_os::plan {
   use std::string::{Self, String};
-  use sui::{object::{Self, UID}, transfer, tx_context::TxContext};
+  use sui::{event, object::{Self, ID, UID}, transfer, tx_context::TxContext};
 
   // ============================================================
   // Errors
@@ -13,6 +13,12 @@ module travel_os::plan {
   const EZeroAmount: u64 = 1;
   const EExceedsTotalBudget: u64 = 2;
   const EInvalidDates: u64 = 3;
+
+  // ============================================================
+  // Events
+  // ============================================================
+
+  public struct PlanCreated has copy, drop { plan_id: ID, destination: String, total_budget: u64 }
 
   // ============================================================
   // Budget Categories
@@ -44,7 +50,7 @@ module travel_os::plan {
     end_date: u64,
     total_budget: u64,
     budget_items: vector<BudgetItem>,
-    vault_id: u64,
+    vault_id: ID,
   }
 
   // ============================================================
@@ -61,7 +67,7 @@ module travel_os::plan {
     assert!(start_date < end_date, EInvalidDates);
     assert!(total_budget > 0, EZeroAmount);
 
-    TravelPlan {
+    let plan = TravelPlan {
       id: object::new(ctx),
       owner: ctx.sender(),
       destination,
@@ -69,8 +75,14 @@ module travel_os::plan {
       end_date,
       total_budget,
       budget_items: vector[],
-      vault_id: 0,
-    }
+      vault_id: object::id_from_address(@0x0),
+    };
+    event::emit(PlanCreated {
+      plan_id: object::uid_to_inner(&plan.id),
+      destination: plan.destination,
+      total_budget,
+    });
+    plan
   }
 
   public fun add_budget_item(plan: &mut TravelPlan, category: u8, amount: u64, label: String) {
@@ -83,7 +95,7 @@ module travel_os::plan {
     vector::push_back(&mut plan.budget_items, BudgetItem { category, amount, label });
   }
 
-  public fun link_vault(plan: &mut TravelPlan, vault_id: u64) {
+  public fun link_vault(plan: &mut TravelPlan, vault_id: ID) {
     plan.vault_id = vault_id;
   }
 
@@ -105,6 +117,10 @@ module travel_os::plan {
       i = i + 1;
     };
     total
+  }
+
+  public fun vault_id(plan: &TravelPlan): ID {
+    plan.vault_id
   }
 
   public fun remaining_budget(plan: &TravelPlan): u64 {
@@ -170,6 +186,20 @@ module travel_os::plan {
     let ctx = test_scenario::ctx(&mut scenario);
     let mut plan = create_plan(string::utf8(b"Tokyo"), 100, 200, 1000, ctx);
     add_budget_item(&mut plan, CATEGORY_HOTEL, 1200, string::utf8(b"Too Expensive"));
+    transfer::public_transfer(plan, user);
+    test_scenario::end(scenario);
+  }
+
+  #[test]
+  fun test_link_vault() {
+    use sui::test_scenario::Self;
+    let user = @0xA;
+    let mut scenario = test_scenario::begin(user);
+    let ctx = test_scenario::ctx(&mut scenario);
+    let mut plan = new_test_plan(ctx);
+    let vault_id = object::id_from_address(@0xB);
+    link_vault(&mut plan, vault_id);
+    assert!(vault_id(&plan) == vault_id);
     transfer::public_transfer(plan, user);
     test_scenario::end(scenario);
   }

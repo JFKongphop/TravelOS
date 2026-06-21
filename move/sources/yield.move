@@ -4,7 +4,7 @@
 
 module travel_os::yield {
   use std::string::{Self, String};
-  use sui::{object::{Self, UID}, transfer, tx_context::TxContext};
+  use sui::{event, object::{Self, ID, UID}, transfer, tx_context::TxContext};
   use travel_os::vault::{Self, TravelVault};
 
   // ============================================================
@@ -14,6 +14,17 @@ module travel_os::yield {
   const ENotVaultOwner: u64 = 0;
   const EAlreadyClosed: u64 = 1;
   const EZeroAmount: u64 = 2;
+
+  // ============================================================
+  // Events
+  // ============================================================
+
+  public struct YieldPositionCreated has copy, drop {
+    position_id: ID,
+    vault_id: ID,
+    protocol_name: String,
+  }
+  public struct YieldPositionClosed has copy, drop { position_id: ID }
 
   // ============================================================
   // Position Status
@@ -28,12 +39,12 @@ module travel_os::yield {
 
   public struct YieldPosition has key, store {
     id: UID,
-    vault_id: u64,
+    vault_id: ID,
     protocol_name: String,
     deposited_amount: u64,
     receipt_token_type: String,
-    deposited_at: u64,
-    closed_at: u64,
+    deposited_epoch: u64,
+    closed_epoch: u64,
     status: u8,
   }
 
@@ -43,7 +54,7 @@ module travel_os::yield {
 
   public fun create_position(
     vault: &TravelVault,
-    vault_id: u64,
+    vault_id: ID,
     protocol_name: String,
     deposited_amount: u64,
     receipt_token_type: String,
@@ -52,16 +63,22 @@ module travel_os::yield {
     assert!(vault::is_owner(vault, ctx.sender()), ENotVaultOwner);
     assert!(deposited_amount > 0, EZeroAmount);
 
-    YieldPosition {
+    let position = YieldPosition {
       id: object::new(ctx),
       vault_id,
       protocol_name,
       deposited_amount,
       receipt_token_type,
-      deposited_at: ctx.epoch(),
-      closed_at: 0,
+      deposited_epoch: ctx.epoch(),
+      closed_epoch: 0,
       status: STATUS_ACTIVE,
-    }
+    };
+    event::emit(YieldPositionCreated {
+      position_id: object::uid_to_inner(&position.id),
+      vault_id,
+      protocol_name: position.protocol_name,
+    });
+    position
   }
 
   public fun close_position(position: &mut YieldPosition, vault: &TravelVault, ctx: &TxContext) {
@@ -69,7 +86,8 @@ module travel_os::yield {
     assert!(position.status == STATUS_ACTIVE, EAlreadyClosed);
 
     position.status = STATUS_CLOSED;
-    position.closed_at = ctx.epoch();
+    position.closed_epoch = ctx.epoch();
+    event::emit(YieldPositionClosed { position_id: object::uid_to_inner(&position.id) });
   }
 
   // ============================================================
@@ -107,7 +125,7 @@ module travel_os::yield {
 
     let mut position = create_position(
       &vault,
-      1,
+      object::id_from_address(@0x1),
       string::utf8(b"Scallop"),
       1000,
       string::utf8(b"sUSDC"),
@@ -136,7 +154,7 @@ module travel_os::yield {
     let vault = vault::new_test_vault(ctx);
     let mut position = create_position(
       &vault,
-      1,
+      object::id_from_address(@0x1),
       string::utf8(b"Scallop"),
       1000,
       string::utf8(b"sUSDC"),

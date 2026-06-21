@@ -3,7 +3,7 @@
 
 module travel_os::rules {
   use std::string::{Self, String};
-  use sui::{object::{Self, UID}, transfer, tx_context::TxContext};
+  use sui::{event, object::{Self, ID, UID}, transfer, tx_context::TxContext};
   use travel_os::vault::{Self, TravelVault};
 
   // ============================================================
@@ -13,6 +13,14 @@ module travel_os::rules {
   const EInvalidRuleType: u64 = 0;
   const ENotVaultOwner: u64 = 1;
   const EAlreadyDisabled: u64 = 2;
+
+  // ============================================================
+  // Events
+  // ============================================================
+
+  public struct RuleCreated has copy, drop { rule_id: ID, vault_id: ID, rule_type: u8 }
+  public struct RuleEnabled has copy, drop { rule_id: ID }
+  public struct RuleDisabled has copy, drop { rule_id: ID }
 
   // ============================================================
   // Rule Types
@@ -31,7 +39,7 @@ module travel_os::rules {
 
   public struct AutomationRule has key, store {
     id: UID,
-    vault_id: u64,
+    vault_id: ID,
     rule_type: u8,
     trigger_time: u64,
     enabled: bool,
@@ -43,7 +51,7 @@ module travel_os::rules {
 
   public fun create_rule(
     vault: &TravelVault,
-    vault_id: u64,
+    vault_id: ID,
     rule_type: u8,
     trigger_time: u64,
     ctx: &mut TxContext,
@@ -51,24 +59,28 @@ module travel_os::rules {
     assert!(vault::is_owner(vault, ctx.sender()), ENotVaultOwner);
     assert!(rule_type <= RULE_OFFRAMP_REMAINING, EInvalidRuleType);
 
-    AutomationRule {
+    let rule = AutomationRule {
       id: object::new(ctx),
       vault_id,
       rule_type,
       trigger_time,
       enabled: true,
-    }
+    };
+    event::emit(RuleCreated { rule_id: object::uid_to_inner(&rule.id), vault_id, rule_type });
+    rule
   }
 
   public fun disable_rule(rule: &mut AutomationRule, vault: &TravelVault, ctx: &TxContext) {
     assert!(vault::is_owner(vault, ctx.sender()), ENotVaultOwner);
     assert!(rule.enabled, EAlreadyDisabled);
     rule.enabled = false;
+    event::emit(RuleDisabled { rule_id: object::uid_to_inner(&rule.id) });
   }
 
   public fun enable_rule(rule: &mut AutomationRule, vault: &TravelVault, ctx: &TxContext) {
     assert!(vault::is_owner(vault, ctx.sender()), ENotVaultOwner);
     rule.enabled = true;
+    event::emit(RuleEnabled { rule_id: object::uid_to_inner(&rule.id) });
   }
 
   // ============================================================
@@ -110,7 +122,13 @@ module travel_os::rules {
 
     let vault = vault::new_test_vault(ctx);
 
-    let mut rule = create_rule(&vault, 1, RULE_STAKE_IDLE_FUNDS, 50, ctx);
+    let mut rule = create_rule(
+      &vault,
+      object::id_from_address(@0x1),
+      RULE_STAKE_IDLE_FUNDS,
+      50,
+      ctx,
+    );
     assert!(is_enabled(&rule));
     assert!(rule_type(&rule) == RULE_STAKE_IDLE_FUNDS);
 
@@ -134,7 +152,13 @@ module travel_os::rules {
     let ctx = test_scenario::ctx(&mut scenario);
 
     let vault = vault::new_test_vault(ctx);
-    let mut rule = create_rule(&vault, 1, RULE_WITHDRAW_BEFORE_TRIP, 100, ctx);
+    let mut rule = create_rule(
+      &vault,
+      object::id_from_address(@0x1),
+      RULE_WITHDRAW_BEFORE_TRIP,
+      100,
+      ctx,
+    );
     disable_rule(&mut rule, &vault, ctx);
     disable_rule(&mut rule, &vault, ctx); // should fail
 
