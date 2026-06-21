@@ -38,15 +38,17 @@ app.post("/api/full-plan", async (req, res) => {
   }
 });
 
-// Execute — returns PTB for signing
+// Execute — returns serialized PTB for wallet signing
 app.post("/api/execute", async (req, res) => {
   try {
     const { action, sender, params } = req.body ?? {};
     if (!action) return res.status(400).json({ error: "action required" });
 
     const tx = await supervisor.execute(action, sender || "", params || {});
-    const txData = (tx as any).getData?.() ?? {};
-    res.json({ action, commands: txData.commands?.length ?? 0, inputs: txData.inputs?.length ?? 0 });
+    // Serialize the transaction so the frontend can sign + submit via wallet
+    const txBytes = (tx as any).serialize?.() ?? new Uint8Array();
+    const txBase64 = Buffer.from(txBytes).toString("base64");
+    res.json({ action, txBytes: txBase64 });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
