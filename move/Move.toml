@@ -1,0 +1,8 @@
+[package]
+name = "travel_os"
+edition = "2024"
+license = "MIT"
+authors = ["TravelOS Team"]
+
+[addresses]
+travel_os = "0x0"
