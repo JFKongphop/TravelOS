@@ -91,6 +91,9 @@ export class SupervisorAgent {
     });
 
     // Step 2: Deposit funds
+    // Fixed demo amounts — vault gets 10000 MIST so it can cover all bookings
+    const DEPOSIT_MIST = 10_000;
+    const BOOKING_MIST = 100; // per booking — tiny fixed amount for testnet demo
     actions.push({
       step: 2,
       name: "Deposit Travel Funds",
@@ -98,7 +101,7 @@ export class SupervisorAgent {
       action: "depositFunds",
       params: {
         vaultId: "<resolved-after-step-1>",
-        amount: bp.budget * 1_000_000_000,
+        amount: DEPOSIT_MIST,
       },
     });
 
@@ -111,7 +114,7 @@ export class SupervisorAgent {
         action: "investIdleCapital",
         params: {
           vaultId: "<resolved-after-step-2>",
-          amount: ts.investAmount * 1_000_000_000,
+          amount: BOOKING_MIST,
           protocol: ts.protocol,
         },
       });
@@ -128,7 +131,7 @@ export class SupervisorAgent {
           vaultId: "<resolved-after-step-2>",
           planId: "<resolved-after-step-1>",
           provider: bk.hotel.name,
-          amount: bk.hotel.pricePerNight * bp.duration * 1_000_000_000,
+          amount: BOOKING_MIST,
         },
       });
     }
@@ -144,7 +147,7 @@ export class SupervisorAgent {
           vaultId: "<resolved-after-step-2>",
           planId: "<resolved-after-step-1>",
           provider: bk.flight.airline,
-          amount: bk.flight.price * 1_000_000_000,
+          amount: BOOKING_MIST,
         },
       });
     }
@@ -179,7 +182,7 @@ export class SupervisorAgent {
     switch (action) {
       case "createTrip": return sdk.createTrip(sender, params);
       case "depositFunds": return sdk.depositFunds(params);
-      case "investIdleCapital": return sdk.investIdleCapital(params);
+      case "investIdleCapital": return sdk.investIdleCapital(sender, params);
       case "prepareForDeparture": return sdk.prepareForDeparture(params);
       case "bookHotel": return sdk.bookHotel(sender, params);
       case "bookFlight": return sdk.bookFlight(sender, params);

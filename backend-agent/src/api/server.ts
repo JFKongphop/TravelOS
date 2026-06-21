@@ -56,13 +56,19 @@ app.post("/api/execute", async (req, res) => {
     // Default sender for PTB construction when not provided
     sender = sender || "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-    // Merge request params with safe fallbacks so PTB building never crashes on missing IDs
+    // Fixed amounts per action — never trust frontend values for amounts
+    const FIXED_AMOUNTS: Record<string, number> = {
+      depositFunds:       10_000, // 10,000 MIST so vault can cover all bookings
+      investIdleCapital:  100,
+      bookHotel:          100,
+      bookFlight:         100,
+    };
     const DUMMY_ID = "0x0000000000000000000000000000000000000000000000000000000000000001";
     const safeParams = {
       vaultId:     DUMMY_ID,
       planId:      DUMMY_ID,
       positionId:  DUMMY_ID,
-      amount:      1_000_000_000,
+      amount:      100,
       protocol:    "Scallop",
       provider:    "Test Provider",
       destination: "Tokyo",
@@ -70,6 +76,8 @@ app.post("/api/execute", async (req, res) => {
       endDate:     Math.floor(Date.now() / 1000) + 86400 * 8,
       totalBudget: 2000,
       ...params,
+      // Always override amount with fixed per-action value — ignores stale frontend state
+      amount: FIXED_AMOUNTS[action] ?? Math.min(Number(params?.amount ?? 100), 10_000),
     };
 
     const tx = await supervisor.execute(action, sender, safeParams);
