@@ -26,7 +26,7 @@ export function bookHotelPTB(
     arguments: [intent, vaultArg],
   });
 
-  tx.moveCall({
+  const nft = tx.moveCall({
     target: `${reservationModule(packageId)}::mint`,
     arguments: [
       tx.pure.id(input.planId),
@@ -36,4 +36,7 @@ export function bookHotelPTB(
       receipt,
     ],
   });
+
+  // Transfer all non-drop objects to sender
+  tx.transferObjects([intent, receipt, nft], sender);
 }

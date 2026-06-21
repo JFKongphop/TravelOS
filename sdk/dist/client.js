@@ -18,9 +18,9 @@ export class TravelOSClient {
         depositFundsPTB(tx, this.packageId, input);
         return tx;
     }
-    investIdleCapital(input) {
+    investIdleCapital(sender, input) {
         const tx = this.buildTx();
-        investIdleCapitalPTB(tx, this.packageId, input);
+        investIdleCapitalPTB(tx, this.packageId, sender, input);
         return tx;
     }
     prepareForDeparture(input) {

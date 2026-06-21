@@ -60,7 +60,7 @@ async function main() {
   let positionId = "";
   {
     const r = await run("3. investIdleCapital", () =>
-      S.investIdleCapital({ vaultId, amount: 500_000, protocol: "scallop" })
+      S.investIdleCapital(ADDR, { vaultId, amount: 500_000, protocol: "scallop" })
     );
     positionId = ids(r.changes, "yield::YieldPosition")[0] || "";
     console.log(`  Position: ${positionId}`);
@@ -84,7 +84,7 @@ async function main() {
   // 6. Prepare for Departure
   if (positionId) {
     await run("6. prepareForDeparture", () =>
-      S.prepareForDeparture({ vaultId, positionId })
+      S.prepareForDeparture({ vaultId })
     );
   }
 

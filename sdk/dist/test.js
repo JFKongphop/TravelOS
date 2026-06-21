@@ -51,7 +51,7 @@ async function main() {
     // 3. Invest Idle Capital
     let positionId = "";
     {
-        const r = await run("3. investIdleCapital", () => S.investIdleCapital({ vaultId, amount: 500000, protocol: "scallop" }));
+        const r = await run("3. investIdleCapital", () => S.investIdleCapital(ADDR, { vaultId, amount: 500000, protocol: "scallop" }));
         positionId = ids(r.changes, "yield::YieldPosition")[0] || "";
         console.log(`  Position: ${positionId}`);
     }
@@ -66,7 +66,7 @@ async function main() {
     await run("5. bookFlight", () => S.bookFlight(ADDR, { vaultId, planId, provider: "Japan Airlines", amount: 200000 }));
     // 6. Prepare for Departure
     if (positionId) {
-        await run("6. prepareForDeparture", () => S.prepareForDeparture({ vaultId, positionId }));
+        await run("6. prepareForDeparture", () => S.prepareForDeparture({ vaultId }));
     }
     // 7. Cancel Booking
     if (reservationId) {

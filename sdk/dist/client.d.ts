@@ -15,14 +15,13 @@ export declare class TravelOSClient {
         vaultId: string;
         amount: number;
     }): Transaction;
-    investIdleCapital(input: {
+    investIdleCapital(sender: string, input: {
         vaultId: string;
         amount: number;
         protocol: string;
     }): Transaction;
     prepareForDeparture(input: {
         vaultId: string;
-        positionId: string;
     }): Transaction;
     bookHotel(sender: string, input: {
         vaultId: string;

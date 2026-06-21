@@ -16,7 +16,7 @@ export function bookHotelPTB(tx, packageId, sender, input) {
         target: `${paymentModule(packageId)}::execute_payment`,
         arguments: [intent, vaultArg],
     });
-    tx.moveCall({
+    const nft = tx.moveCall({
         target: `${reservationModule(packageId)}::mint`,
         arguments: [
             tx.pure.id(input.planId),
@@ -26,5 +26,7 @@ export function bookHotelPTB(tx, packageId, sender, input) {
             receipt,
         ],
     });
+    // Transfer all non-drop objects to sender
+    tx.transferObjects([intent, receipt, nft], sender);
 }
 //# sourceMappingURL=bookHotel.js.map

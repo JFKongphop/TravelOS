@@ -8,14 +8,13 @@ export function completeTripPTB(
 ) {
   const vaultArg = tx.object(input.vaultId);
 
-  tx.moveCall({    target: `${vaultModule(packageId)}::mark_ready`,
-    arguments: [vaultArg],
-  });
+  // ReadyForTravel → Traveling → Completed
   tx.moveCall({
     target: `${vaultModule(packageId)}::mark_traveling`,
     arguments: [vaultArg],
   });
-  tx.moveCall({    target: `${vaultModule(packageId)}::mark_completed`,
+  tx.moveCall({
+    target: `${vaultModule(packageId)}::mark_completed`,
     arguments: [vaultArg],
   });
 }

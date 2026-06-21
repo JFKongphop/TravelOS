@@ -39,13 +39,13 @@ export class TravelOSClient {
     return tx;
   }
 
-  investIdleCapital(input: { vaultId: string; amount: number; protocol: string }) {
+  investIdleCapital(sender: string, input: { vaultId: string; amount: number; protocol: string }) {
     const tx = this.buildTx();
-    investIdleCapitalPTB(tx, this.packageId, input);
+    investIdleCapitalPTB(tx, this.packageId, sender, input);
     return tx;
   }
 
-  prepareForDeparture(input: { vaultId: string; positionId: string }) {
+  prepareForDeparture(input: { vaultId: string }) {
     const tx = this.buildTx();
     prepareForDeparturePTB(tx, this.packageId, input);
     return tx;
