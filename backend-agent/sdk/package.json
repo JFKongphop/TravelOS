@@ -1,0 +1,22 @@
+{
+  "name": "travelos-sdk",
+  "version": "1.0.0",
+  "description": "TravelOS PTB SDK — orchestration layer for Sui Move contracts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@mysten/sui": "^1.22.0",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0"
+  }
+}

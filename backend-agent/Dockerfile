@@ -1,12 +1,12 @@
-# Build from repo root:
-#   docker build -f backend-agent/Dockerfile -t travelos-backend .
+# Build from backend-agent/ folder (build context = backend-agent/)
+#   flyctl deploy   OR   docker build -t travelos-backend .
 #
 # ---- build stage ----
 FROM node:22-alpine AS builder
 
 WORKDIR /repo
 
-# Build SDK first
+# Build SDK
 COPY sdk/package*.json ./sdk/
 RUN cd sdk && npm ci
 
@@ -14,16 +14,16 @@ COPY sdk ./sdk
 RUN cd sdk && npm run build
 
 # Build backend
-COPY backend-agent/package*.json ./backend-agent/
-RUN cd backend-agent && npm ci
+COPY package*.json ./
+RUN npm ci
 
-# Install SDK into backend as a local dependency
-RUN cd backend-agent && npm install /repo/sdk
+# Install SDK as local dependency
+RUN npm install /repo/sdk
 
-COPY backend-agent/tsconfig.json ./backend-agent/
-COPY backend-agent/src ./backend-agent/src
+COPY tsconfig.json .
+COPY src ./src
 
-RUN cd backend-agent && npm run build
+RUN npm run build
 
 # ---- runtime stage ----
 FROM node:22-alpine AS runner
@@ -34,10 +34,10 @@ ENV NODE_ENV=production
 
 COPY --from=builder /repo/sdk /sdk
 
-COPY backend-agent/package*.json ./
+COPY package*.json ./
 RUN npm ci --omit=dev && npm install /sdk
 
-COPY --from=builder /repo/backend-agent/dist ./dist
+COPY --from=builder /repo/dist ./dist
 
 EXPOSE 3001
 
