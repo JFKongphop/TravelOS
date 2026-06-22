@@ -2,6 +2,10 @@
 
 TravelOS combines multi-agent planning, programmable payments, and DeFi capital management to transform travel savings into an autonomous financial workflow powered by Sui programmable transaction blocks.
 
+## 📺 Demo
+
+[![TravelOS Demo](https://img.youtube.com/vi/R0qYO8wbLqY/maxresdefault.jpg)](https://youtu.be/R0qYO8wbLqY)
+
 ---
 
 ## The Problem
